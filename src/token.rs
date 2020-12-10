@@ -1,18 +1,20 @@
 use std::str::FromStr;
+use core::fmt::Debug;
 
-#[derive(Debug)]
 pub enum Token {
-    Operand(Value<f64>),
-    Add(AddOperator),
+    Value(String),
+    Add,
 }
 
-pub trait OperandToken<T> {
-    fn value(&self) -> T;
+pub trait Evaluable<T> {
+    fn eval(&self) -> T;
+    fn print(&self) -> String;
 }
 
-pub trait OperatorToken<T, R>
-    where T: OperandToken<R> {
-    fn eval(l: &T, r: &T) -> R;
+impl<T> Debug for dyn Evaluable<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Token{{{}}}", self.print())
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -21,17 +23,14 @@ pub struct Value<T>
     val: T,
 }
 
-// impl<T> Token for Value<T>
-//     where T: FromStr {
-//     fn get_type() -> TokenType {
-//         Operand
-//     }
-// }
-
-impl<T> OperandToken<T> for Value<T>
-    where T: FromStr + Copy{
-    fn value(&self) -> T {
+impl<T> Evaluable<T> for Value<T>
+    where T: FromStr + Copy + ToString {
+    fn eval(&self) -> T {
         self.val
+    }
+
+    fn print(&self) -> String {
+        self.val.to_string()
     }
 }
 
@@ -44,17 +43,29 @@ impl<T> Value<T>
 }
 
 #[derive(Debug)]
-pub struct AddOperator {}
+pub struct AddOperator<L, R>
+    where L: Evaluable<f64>,
+          R: Evaluable<f64> {
+    left: L,
+    right: R,
+}
 
-// impl Token for AddOperator {
-//     fn get_type() -> TokenType {
-//         Operator
-//     }
-// }
+impl<L, R> AddOperator<L, R>
+    where L: Evaluable<f64>,
+          R: Evaluable<f64>{
+    pub fn new(left: L, right: R) -> Self {
+        AddOperator { left, right }
+    }
+}
 
-impl OperatorToken<Value<f64>, f64> for AddOperator{
+impl<L, R> Evaluable<f64> for AddOperator<L, R>
+    where L: Evaluable<f64>,
+          R: Evaluable<f64>{
+    fn eval(&self) -> f64 {
+        self.left.eval() + self.right.eval()
+    }
 
-    fn eval(left: &Value<f64>, right: &Value<f64>) -> f64 {
-        left.value() + right.value()
+    fn print(&self) -> String {
+        self.left.print() + " + " + self.right.print().as_str()
     }
 }
