@@ -1,9 +1,19 @@
 use std::str::FromStr;
 use core::fmt::Debug;
 
-pub enum Token {
-    Value(String),
-    Add,
+#[derive(PartialEq, Debug)]
+pub enum TokenType {
+    Operand,
+    Operator,
+    OpenBrace,
+    CloseBrace,
+    ArgSeparator,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Token {
+    pub t: TokenType,
+    pub v: String,
 }
 
 pub trait Evaluable<T> {

@@ -1,60 +1,67 @@
 use std::convert::TryFrom;
 
-use crate::token::{AddOperator, Evaluable, Value};
+use crate::token::{AddOperator, Evaluable, Token, TokenType, Value};
+use crate::token::TokenType::*;
 
 mod token;
 
-pub fn str_to_tokens(s: &str) -> Vec<&str> {
-    let mut start = 0;
-    let mut end = 0;
-    let mut chars = s.chars();
-    let mut tokens: Vec<&str> = Vec::new();
-    loop {
-        let mut c = match chars.next() {
-            None => ' ',
-            Some(c) => c,
-        };
-        if c == ' ' { break; }
-        if c.is_numeric() {
-            while c.is_numeric() || c == '.' {
-                c = match chars.next() {
-                    None => ' ',
-                    Some(c) => c,
-                };
-                end += 1;
-            }
-            let sub = &s[start..end];
-            tokens.push(sub);
-            start = end;
-        }
-        if c == '+' {
-            tokens.push("+");
-            start += 1;
-            end += 1;
+pub fn str_to_tokens(s: &str) -> Vec<Token> {
+    let mut tokens = Vec::new();
+    for c in s.chars() {
+        if c.is_alphanumeric() {
+            process_char(&mut tokens, c, Operand, None);
+        } else if c == '.' {
+            process_char(&mut tokens, c, Operand, Some("0"));
+        } else if c == '(' {
+            tokens.push(Token { t: OpenBrace, v: String::from(c) })
+        } else if c == ')' {
+            tokens.push(Token { t: CloseBrace, v: String::from(c) })
+        } else if c == ',' {
+            tokens.push(Token { t: ArgSeparator, v: String::from(c) })
+        } else if c == '*' || c == '/' || c == '%' || c == '+' || c == '-' || c == '<' || c == '>'
+            || c == '=' || c == '!' || c == '&' || c == '^' || c == '|' {
+            process_char(&mut tokens, c, Operator, None);
         }
     }
     tokens
 }
 
-fn to_rpn(tokens: Vec<&str>) -> Vec<&str> {
+fn process_char(tokens: &mut Vec<Token>, c: char, token_type: TokenType, prefix: Option<&str>) {
+    let p = match prefix {
+        None => "",
+        Some(pp) => pp,
+    };
+    match tokens.last_mut() {
+        None => tokens.push(Token { t: token_type, v: String::from(p) + &String::from(c) }),
+        Some(mut t) => {
+            if t.t == token_type {
+                t.v.push(c);
+            } else {
+                tokens.push(Token { t: token_type, v: String::from(p) + &String::from(c) });
+            }
+        }
+    };
+}
+
+fn to_rpn(tokens: Vec<Token>) -> Vec<Token> {
     let mut rpn = Vec::new();
     let mut ops = Vec::new();
     for token in tokens {
-        if token == "(" {
-            ops.push("(");
-        } else if token == ")" {
+        if token.t == OpenBrace {
+            ops.push(token);
+        } else if token.t == CloseBrace {
             while let Some(op) = ops.pop() {
-                if op == "(" { break; }
+                if op.t == OpenBrace { break; }
                 rpn.push(op);
             }
-        } else if !is_operator(token) {
+        } else if token.t != Operator {
             rpn.push(token);
         } else {
-            if ops.is_empty() || get_operator_precedence(ops.last().unwrap()) > get_operator_precedence(token) {
+            if ops.is_empty() || get_operator_precedence(&ops.last().unwrap().v) > get_operator_precedence(&token.v) {
                 ops.push(token);
             } else {
                 while let Some(stack_op) = ops.last() {
-                    if get_operator_precedence(token) >= get_operator_precedence(stack_op) {
+                    if get_operator_precedence(&token.v) >= get_operator_precedence(&stack_op.v) {
                         rpn.push(ops.pop().unwrap());
                     } else {
                         break;
@@ -70,12 +77,10 @@ fn to_rpn(tokens: Vec<&str>) -> Vec<&str> {
     rpn
 }
 
-fn is_operator(op: &str) -> bool {
-    op == "+" || op == "-" || op == "/" || op == "*"
-}
-
 fn get_operator_precedence(op: &str) -> u8 {
-    return if op == "*" || op == "/" || op == "%" {
+    return if op == "^" {
+        29
+    } else if op == "*" || op == "/" || op == "%" {
         30
     } else if op == "+" || op == "-" {
         40
@@ -87,8 +92,6 @@ fn get_operator_precedence(op: &str) -> u8 {
         70
     } else if op == "&" {
         80
-    } else if op == "^" {
-        90
     } else if op == "|" {
         100
     } else if op == "&&" {
@@ -96,7 +99,7 @@ fn get_operator_precedence(op: &str) -> u8 {
     } else if op == "||" {
         120
     } else {
-        160
+        u8::max_value()
     };
 }
 
@@ -146,22 +149,20 @@ mod str_to_tests {
     }
 
     #[test]
-    fn str_to_tokens_test() {
-        str_to_tokens("123.23+100");
-    }
-
-    #[test]
-    fn to_rpn_test_1() {
-        assert_eq!(vec!["1", "2", "+"], to_rpn(vec!["1", "+", "2"]));
-    }
-
-    #[test]
-    fn to_rpn_test_2() {
-        assert_eq!(vec!["a", "b", "c", "*", "+", "d", "+"], to_rpn(vec!["a", "+", "b", "*", "c", "+", "d"]));
-    }
-
-    #[test]
     fn str_to_rpn_test_1() {
-        assert_eq!(vec!["a", "b", "c", "*", "+", "d", "+"], to_rpn(str_to_tokens("a+b*c+d")));
+        let rpn: String = to_rpn(str_to_tokens("a+b*c+d")).iter().flat_map(|t|t.v.chars()).collect();
+        assert_eq!("abc*+d+", rpn);
+    }
+
+    #[test]
+    fn str_to_rpn_test_2() {
+        let rpn: String = to_rpn(str_to_tokens("a+b*(c^d-e)^(f+g*h)-i")).iter().flat_map(|t|t.v.chars()).collect();
+        assert_eq!("abcd^e-fgh*+^*+i-", rpn);
+    }
+
+    #[test]
+    fn str_to_rpn_test_3() {
+        let rpn: String = to_rpn(str_to_tokens("A*(B+C)/D")).iter().flat_map(|t|t.v.chars()).collect();
+        assert_eq!("ABC+*D/", rpn);
     }
 }
