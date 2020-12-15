@@ -1,9 +1,36 @@
 use std::convert::TryFrom;
 
-use crate::token::{AddOperator, Evaluable, Token, TokenType, Value};
+use crate::token::{AddOperator, Evaluable, Token, TokenType, Value, SubtractOperator, MultiplyOperator, DivideOperator};
 use crate::token::TokenType::*;
+use std::borrow::Borrow;
+use std::ops::Deref;
 
 mod token;
+
+pub fn str_to_evaluable(s: &str) -> Box<dyn Evaluable<f64>> {
+    let rpn = to_rpn(str_to_tokens(s));
+    let mut stack: Vec<Box<dyn Evaluable<f64>>> = Vec::new();
+    for token in rpn {
+        match token.t {
+            Operand => stack.push(Box::new(<Value<f64>>::new(&token.v).unwrap())),
+            Operator => {
+                let right = stack.pop().unwrap();
+                let left = stack.pop().unwrap();
+                if token.v == "+" {
+                    stack.push(Box::new(AddOperator::new(left, right)));
+                } else if token.v == "-" {
+                    stack.push(Box::new(SubtractOperator::new(left, right)));
+                } else if token.v == "*" {
+                    stack.push(Box::new(MultiplyOperator::new(left, right)));
+                } else if token.v == "/" {
+                    stack.push(Box::new(DivideOperator::new(left, right)));
+                }
+            }
+            _ => {}
+        }
+    }
+    stack.pop().unwrap()
+}
 
 pub fn str_to_tokens(s: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
@@ -164,5 +191,18 @@ mod str_to_tests {
     fn str_to_rpn_test_3() {
         let rpn: String = to_rpn(str_to_tokens("A*(B+C)/D")).iter().flat_map(|t|t.v.chars()).collect();
         assert_eq!("ABC+*D/", rpn);
+    }
+
+    #[test]
+    fn str_to_rpn_test_4() {
+        let rpn: String = to_rpn(str_to_tokens("(6+10-4)/(1+1*2)+1")).iter().flat_map(|t|t.v.chars()).collect();
+        assert_eq!("610+4-112*+/1+", rpn);
+    }
+
+    #[test]
+    fn numeric_eval() {
+        let e = str_to_evaluable("(6+10-4)/(1+1*2)+1");
+        println!("evaluable: {:?}", e);
+        assert_eq!(5.0, e.eval());
     }
 }

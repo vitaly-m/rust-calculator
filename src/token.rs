@@ -53,29 +53,89 @@ impl<T> Value<T>
 }
 
 #[derive(Debug)]
-pub struct AddOperator<L, R>
-    where L: Evaluable<f64>,
-          R: Evaluable<f64> {
-    left: L,
-    right: R,
+pub struct AddOperator {
+    left: Box<dyn Evaluable<f64>>,
+    right: Box<dyn Evaluable<f64>>,
 }
 
-impl<L, R> AddOperator<L, R>
-    where L: Evaluable<f64>,
-          R: Evaluable<f64>{
-    pub fn new(left: L, right: R) -> Self {
-        AddOperator { left, right }
+impl AddOperator {
+    pub fn new(left: Box<dyn Evaluable<f64>>, right: Box<dyn Evaluable<f64>>) -> Self {
+        Self { left, right }
     }
 }
 
-impl<L, R> Evaluable<f64> for AddOperator<L, R>
-    where L: Evaluable<f64>,
-          R: Evaluable<f64>{
+impl Evaluable<f64> for AddOperator {
     fn eval(&self) -> f64 {
         self.left.eval() + self.right.eval()
     }
 
     fn print(&self) -> String {
         self.left.print() + " + " + self.right.print().as_str()
+    }
+}
+
+#[derive(Debug)]
+pub struct SubtractOperator {
+    left: Box<dyn Evaluable<f64>>,
+    right: Box<dyn Evaluable<f64>>,
+}
+
+impl SubtractOperator {
+    pub fn new(left: Box<dyn Evaluable<f64>>, right: Box<dyn Evaluable<f64>>) -> Self {
+        Self { left, right }
+    }
+}
+
+impl Evaluable<f64> for SubtractOperator {
+    fn eval(&self) -> f64 {
+        self.left.eval() - self.right.eval()
+    }
+
+    fn print(&self) -> String {
+        self.left.print() + " - " + self.right.print().as_str()
+    }
+}
+
+#[derive(Debug)]
+pub struct MultiplyOperator {
+    left: Box<dyn Evaluable<f64>>,
+    right: Box<dyn Evaluable<f64>>,
+}
+
+impl MultiplyOperator {
+    pub fn new(left: Box<dyn Evaluable<f64>>, right: Box<dyn Evaluable<f64>>) -> Self {
+        Self { left, right }
+    }
+}
+
+impl Evaluable<f64> for MultiplyOperator {
+    fn eval(&self) -> f64 {
+        self.left.eval() * self.right.eval()
+    }
+
+    fn print(&self) -> String {
+        self.left.print() + " * " + self.right.print().as_str()
+    }
+}
+
+#[derive(Debug)]
+pub struct DivideOperator {
+    left: Box<dyn Evaluable<f64>>,
+    right: Box<dyn Evaluable<f64>>,
+}
+
+impl DivideOperator {
+    pub fn new(left: Box<dyn Evaluable<f64>>, right: Box<dyn Evaluable<f64>>) -> Self {
+        Self { left, right }
+    }
+}
+
+impl Evaluable<f64> for DivideOperator {
+    fn eval(&self) -> f64 {
+        self.left.eval() / self.right.eval()
+    }
+
+    fn print(&self) -> String {
+        self.left.print() + " / " + self.right.print().as_str()
     }
 }
