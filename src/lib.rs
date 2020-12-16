@@ -1,35 +1,68 @@
 use std::convert::TryFrom;
+use std::str::FromStr;
 
-use crate::token::{AddOperator, Evaluable, Token, TokenType, Value, SubtractOperator, MultiplyOperator, DivideOperator};
+pub use crate::token::{AddOperator, DivideOperator, GreaterOperator, LogicalAndOperator, MultiplyOperator, Operator, SubtractOperator, Token, TokenType, Value};
+pub use crate::token::OperatorResult;
 use crate::token::TokenType::*;
-use std::borrow::Borrow;
-use std::ops::Deref;
 
 mod token;
 
-pub fn str_to_evaluable(s: &str) -> Box<dyn Evaluable<f64>> {
-    let rpn = to_rpn(str_to_tokens(s));
-    let mut stack: Vec<Box<dyn Evaluable<f64>>> = Vec::new();
-    for token in rpn {
-        match token.t {
-            Operand => stack.push(Box::new(<Value<f64>>::new(&token.v).unwrap())),
-            Operator => {
-                let right = stack.pop().unwrap();
-                let left = stack.pop().unwrap();
-                if token.v == "+" {
-                    stack.push(Box::new(AddOperator::new(left, right)));
-                } else if token.v == "-" {
-                    stack.push(Box::new(SubtractOperator::new(left, right)));
-                } else if token.v == "*" {
-                    stack.push(Box::new(MultiplyOperator::new(left, right)));
-                } else if token.v == "/" {
-                    stack.push(Box::new(DivideOperator::new(left, right)));
-                }
-            }
-            _ => {}
-        }
+#[derive(Debug)]
+pub struct Evaluable<T> {
+    operator: Box<dyn Operator<T>>,
+}
+
+impl Operator<OperatorResult> for Evaluable<OperatorResult> {
+    fn eval(&self) -> OperatorResult {
+        self.operator.eval()
     }
-    stack.pop().unwrap()
+
+    fn print(&self) -> String {
+        format!("{:?}", self.operator)
+    }
+}
+
+impl Operator<bool> for Evaluable<bool> {
+    fn eval(&self) -> bool {
+        self.operator.eval()
+    }
+
+    fn print(&self) -> String {
+        format!("{:?}", self.operator)
+    }
+}
+
+impl FromStr for Evaluable<OperatorResult> {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let rpn = to_rpn(str_to_tokens(s));
+        let mut stack: Vec<Box<dyn Operator<_>>> = Vec::new();
+        for token in rpn {
+            match token.t {
+                Operand => stack.push(Box::new(Value::from_str(&token.v).unwrap())),
+                Operator => {
+                    let right = stack.pop().unwrap();
+                    let left = stack.pop().unwrap();
+                    if token.v == "+" {
+                        stack.push(Box::new(AddOperator::new(left, right)));
+                    } else if token.v == "-" {
+                        stack.push(Box::new(SubtractOperator::new(left, right)));
+                    } else if token.v == "*" {
+                        stack.push(Box::new(MultiplyOperator::new(left, right)));
+                    } else if token.v == "/" {
+                        stack.push(Box::new(DivideOperator::new(left, right)));
+                    } else if token.v == ">" {
+                        stack.push(Box::new(GreaterOperator::new(left, right)));
+                    } else if token.v == "&&" {
+                        stack.push(Box::new(LogicalAndOperator::new(left, right)));
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(Evaluable { operator: stack.pop().unwrap() })
+    }
 }
 
 pub fn str_to_tokens(s: &str) -> Vec<Token> {
@@ -60,7 +93,7 @@ fn process_char(tokens: &mut Vec<Token>, c: char, token_type: TokenType, prefix:
     };
     match tokens.last_mut() {
         None => tokens.push(Token { t: token_type, v: String::from(p) + &String::from(c) }),
-        Some(mut t) => {
+        Some(t) => {
             if t.t == token_type {
                 t.v.push(c);
             } else {
@@ -177,32 +210,39 @@ mod str_to_tests {
 
     #[test]
     fn str_to_rpn_test_1() {
-        let rpn: String = to_rpn(str_to_tokens("a+b*c+d")).iter().flat_map(|t|t.v.chars()).collect();
+        let rpn: String = to_rpn(str_to_tokens("a+b*c+d")).iter().flat_map(|t| t.v.chars()).collect();
         assert_eq!("abc*+d+", rpn);
     }
 
     #[test]
     fn str_to_rpn_test_2() {
-        let rpn: String = to_rpn(str_to_tokens("a+b*(c^d-e)^(f+g*h)-i")).iter().flat_map(|t|t.v.chars()).collect();
+        let rpn: String = to_rpn(str_to_tokens("a+b*(c^d-e)^(f+g*h)-i")).iter().flat_map(|t| t.v.chars()).collect();
         assert_eq!("abcd^e-fgh*+^*+i-", rpn);
     }
 
     #[test]
     fn str_to_rpn_test_3() {
-        let rpn: String = to_rpn(str_to_tokens("A*(B+C)/D")).iter().flat_map(|t|t.v.chars()).collect();
+        let rpn: String = to_rpn(str_to_tokens("A*(B+C)/D")).iter().flat_map(|t| t.v.chars()).collect();
         assert_eq!("ABC+*D/", rpn);
     }
 
     #[test]
     fn str_to_rpn_test_4() {
-        let rpn: String = to_rpn(str_to_tokens("(6+10-4)/(1+1*2)+1")).iter().flat_map(|t|t.v.chars()).collect();
+        let rpn: String = to_rpn(str_to_tokens("(6+10-4)/(1+1*2)+1")).iter().flat_map(|t| t.v.chars()).collect();
         assert_eq!("610+4-112*+/1+", rpn);
     }
 
     #[test]
     fn numeric_eval() {
-        let e = str_to_evaluable("(6+10-4)/(1+1*2)+1");
+        let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1").unwrap();
         println!("evaluable: {:?}", e);
-        assert_eq!(5.0, e.eval());
+        assert_eq!(OperatorResult::F64(5.0), e.eval());
+    }
+
+    #[test]
+    fn bool_eval() {
+        let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1>6").unwrap();
+        println!("evaluable: {:?}", e);
+        assert_eq!(OperatorResult::Bool(false), e.eval());
     }
 }
