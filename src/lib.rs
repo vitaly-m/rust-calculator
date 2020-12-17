@@ -1,7 +1,8 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-pub use crate::token::{AddOperator, DivideOperator, GreaterOperator, LogicalAndOperator, MultiplyOperator, Operator, SubtractOperator, Token, TokenType, Value};
+pub use crate::token::{Operator, Token, TokenType, Value};
+use crate::token::{F64Operator, BoolOperator};
 pub use crate::token::OperatorResult;
 use crate::token::TokenType::*;
 
@@ -45,17 +46,17 @@ impl FromStr for Evaluable<OperatorResult> {
                     let right = stack.pop().unwrap();
                     let left = stack.pop().unwrap();
                     if token.v == "+" {
-                        stack.push(Box::new(AddOperator::new(left, right)));
+                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::F64(a + b))));
                     } else if token.v == "-" {
-                        stack.push(Box::new(SubtractOperator::new(left, right)));
+                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::F64(a - b))));
                     } else if token.v == "*" {
-                        stack.push(Box::new(MultiplyOperator::new(left, right)));
+                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::F64(a * b))));
                     } else if token.v == "/" {
-                        stack.push(Box::new(DivideOperator::new(left, right)));
+                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::F64(a / b))));
                     } else if token.v == ">" {
-                        stack.push(Box::new(GreaterOperator::new(left, right)));
+                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::Bool(a > b))));
                     } else if token.v == "&&" {
-                        stack.push(Box::new(LogicalAndOperator::new(left, right)));
+                        stack.push(Box::new(BoolOperator::new(left, right, |a, b| OperatorResult::Bool(a && b))));
                     }
                 }
                 _ => {}
@@ -240,9 +241,16 @@ mod str_to_tests {
     }
 
     #[test]
-    fn bool_eval() {
+    fn bool_eval_1() {
         let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1>6").unwrap();
         println!("evaluable: {:?}", e);
         assert_eq!(OperatorResult::Bool(false), e.eval());
+    }
+
+    #[test]
+    fn bool_eval_2() {
+        let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1>4 && 7>6").unwrap();
+        println!("evaluable: {:?}", e);
+        assert_eq!(OperatorResult::Bool(true), e.eval());
     }
 }

@@ -1,6 +1,5 @@
 use std::str::FromStr;
 use core::fmt::Debug;
-use std::fmt::Formatter;
 use std::fmt;
 
 #[derive(PartialEq, Debug)]
@@ -75,18 +74,20 @@ impl FromStr for Value {
 }
 
 #[derive(Debug)]
-pub struct AddOperator {
+pub struct F64Operator<F> {
     left: Box<dyn Operator<OperatorResult>>,
     right: Box<dyn Operator<OperatorResult>>,
+    func: F,
 }
 
-impl AddOperator {
-    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>) -> Self {
-        Self { left, right }
+impl<F> F64Operator<F> {
+    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>, func: F) -> Self {
+        Self { left, right, func }
     }
 }
 
-impl Operator<OperatorResult> for AddOperator {
+impl<F> Operator<OperatorResult> for F64Operator<F>
+    where F: Fn(f64, f64) -> OperatorResult {
     fn eval(&self) -> OperatorResult {
         let left = match self.left.eval() {
             OperatorResult::F64(v) => v,
@@ -96,147 +97,29 @@ impl Operator<OperatorResult> for AddOperator {
             OperatorResult::F64(v) => v,
             _ => f64::NAN,
         };
-        OperatorResult::F64(left + right)
+        (self.func)(left, right)
     }
 
     fn print(&self) -> String {
-        format!("({} + {})", self.left.print(), self.right.print())
+        format!("({} {})", self.left.print(), self.right.print())
     }
 }
 
 #[derive(Debug)]
-pub struct SubtractOperator {
+pub struct BoolOperator<F> {
     left: Box<dyn Operator<OperatorResult>>,
     right: Box<dyn Operator<OperatorResult>>,
+    func: F,
 }
 
-impl SubtractOperator {
-    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>) -> Self {
-        Self { left, right }
+impl<F> BoolOperator<F> {
+    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>, func: F) -> Self {
+        Self { left, right, func }
     }
 }
 
-impl Operator<OperatorResult> for SubtractOperator {
-    fn eval(&self) -> OperatorResult {
-        let left = match self.left.eval() {
-            OperatorResult::F64(v) => v,
-            _ => f64::NAN,
-        };
-        let right = match self.right.eval() {
-            OperatorResult::F64(v) => v,
-            _ => f64::NAN,
-        };
-        OperatorResult::F64(left - right)
-    }
-
-    fn print(&self) -> String {
-        format!("({} - {})", self.left.print(), self.right.print())
-    }
-}
-
-#[derive(Debug)]
-pub struct MultiplyOperator {
-    left: Box<dyn Operator<OperatorResult>>,
-    right: Box<dyn Operator<OperatorResult>>,
-}
-
-impl MultiplyOperator {
-    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>) -> Self {
-        Self { left, right }
-    }
-}
-
-impl Operator<OperatorResult> for MultiplyOperator {
-    fn eval(&self) -> OperatorResult {
-        let left = match self.left.eval() {
-            OperatorResult::F64(v) => v,
-            _ => f64::NAN,
-        };
-        let right = match self.right.eval() {
-            OperatorResult::F64(v) => v,
-            _ => f64::NAN,
-        };
-        OperatorResult::F64(left * right)
-    }
-
-    fn print(&self) -> String {
-        format!("({} * {})", self.left.print(), self.right.print())
-    }
-}
-
-#[derive(Debug)]
-pub struct DivideOperator {
-    left: Box<dyn Operator<OperatorResult>>,
-    right: Box<dyn Operator<OperatorResult>>,
-}
-
-impl DivideOperator {
-    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>) -> Self {
-        Self { left, right }
-    }
-}
-
-impl Operator<OperatorResult> for DivideOperator {
-    fn eval(&self) -> OperatorResult {
-        let left = match self.left.eval() {
-            OperatorResult::F64(v) => v,
-            _ => f64::NAN,
-        };
-        let right = match self.right.eval() {
-            OperatorResult::F64(v) => v,
-            _ => f64::NAN,
-        };
-        OperatorResult::F64(left / right)
-    }
-
-    fn print(&self) -> String {
-        format!("({} / {})", self.left.print(), self.right.print())
-    }
-}
-
-#[derive(Debug)]
-pub struct GreaterOperator {
-    left: Box<dyn Operator<OperatorResult>>,
-    right: Box<dyn Operator<OperatorResult>>,
-}
-
-impl GreaterOperator {
-    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>) -> Self {
-        Self { left, right }
-    }
-}
-
-impl Operator<OperatorResult> for GreaterOperator {
-    fn eval(&self) -> OperatorResult {
-        let left = match self.left.eval() {
-            OperatorResult::F64(v) => v,
-            _ => f64::NAN,
-        };
-        let right = match self.right.eval() {
-            OperatorResult::F64(v) => v,
-            _ => f64::NAN,
-        };
-        OperatorResult::Bool(left > right)
-    }
-
-    fn print(&self) -> String {
-        format!("({} > {})", self.left.print(), self.right.print())
-    }
-}
-
-#[derive(Debug)]
-pub struct LogicalAndOperator {
-    left: Box<dyn Operator<OperatorResult>>,
-    right: Box<dyn Operator<OperatorResult>>,
-}
-
-impl LogicalAndOperator {
-    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>) -> Self {
-        Self { left, right }
-    }
-}
-
-impl Operator<OperatorResult> for LogicalAndOperator {
+impl<F> Operator<OperatorResult> for BoolOperator<F>
+    where F: Fn(bool, bool) -> OperatorResult {
     fn eval(&self) -> OperatorResult {
         let left = match self.left.eval() {
             OperatorResult::Bool(v) => v,
@@ -246,10 +129,10 @@ impl Operator<OperatorResult> for LogicalAndOperator {
             OperatorResult::Bool(v) => v,
             _ => false,
         };
-        OperatorResult::Bool(left && right)
+        (self.func)(left, right)
     }
 
     fn print(&self) -> String {
-        format!("({} && {})", self.left.print(), self.right.print())
+        format!("({} {})", self.left.print(), self.right.print())
     }
 }
