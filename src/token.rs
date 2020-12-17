@@ -1,5 +1,7 @@
 use std::str::FromStr;
 use core::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt;
 
 #[derive(PartialEq, Debug)]
 pub enum TokenType {
@@ -10,10 +12,19 @@ pub enum TokenType {
     ArgSeparator,
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum OperatorResult {
     F64(f64),
     Bool(bool),
+}
+
+impl Debug for OperatorResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OperatorResult::F64(v) => write!(f, "{}", v),
+            OperatorResult::Bool(v) => write!(f, "{}", v),
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -29,7 +40,7 @@ pub trait Operator<T> {
 
 impl<T> Debug for dyn Operator<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Token{{{}}}", self.print())
+        write!(f, "{{{}}}", self.print())
     }
 }
 
@@ -89,7 +100,7 @@ impl Operator<OperatorResult> for AddOperator {
     }
 
     fn print(&self) -> String {
-        self.left.print() + " + " + self.right.print().as_str()
+        format!("({} + {})", self.left.print(), self.right.print())
     }
 }
 
@@ -119,7 +130,7 @@ impl Operator<OperatorResult> for SubtractOperator {
     }
 
     fn print(&self) -> String {
-        self.left.print() + " - " + self.right.print().as_str()
+        format!("({} - {})", self.left.print(), self.right.print())
     }
 }
 
@@ -149,7 +160,7 @@ impl Operator<OperatorResult> for MultiplyOperator {
     }
 
     fn print(&self) -> String {
-        self.left.print() + " * " + self.right.print().as_str()
+        format!("({} * {})", self.left.print(), self.right.print())
     }
 }
 
@@ -179,7 +190,7 @@ impl Operator<OperatorResult> for DivideOperator {
     }
 
     fn print(&self) -> String {
-        self.left.print() + " / " + self.right.print().as_str()
+        format!("({} / {})", self.left.print(), self.right.print())
     }
 }
 
@@ -209,7 +220,7 @@ impl Operator<OperatorResult> for GreaterOperator {
     }
 
     fn print(&self) -> String {
-        self.left.print() + " > " + self.right.print().as_str()
+        format!("({} > {})", self.left.print(), self.right.print())
     }
 }
 
@@ -239,6 +250,6 @@ impl Operator<OperatorResult> for LogicalAndOperator {
     }
 
     fn print(&self) -> String {
-        self.left.print() + " && " + self.right.print().as_str()
+        format!("({} && {})", self.left.print(), self.right.print())
     }
 }
