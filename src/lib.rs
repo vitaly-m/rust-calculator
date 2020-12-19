@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use std::str::FromStr;
 
 pub use crate::token::{Operator, Token, TokenType, Value};
@@ -8,7 +7,6 @@ use crate::token::TokenType::*;
 
 mod token;
 
-#[derive(Debug)]
 pub struct Evaluable<T> {
     operator: Box<dyn Operator<T>>,
 }
@@ -16,20 +14,6 @@ pub struct Evaluable<T> {
 impl Operator<OperatorResult> for Evaluable<OperatorResult> {
     fn eval(&self) -> OperatorResult {
         self.operator.eval()
-    }
-
-    fn print(&self) -> String {
-        format!("{:?}", self.operator)
-    }
-}
-
-impl Operator<bool> for Evaluable<bool> {
-    fn eval(&self) -> bool {
-        self.operator.eval()
-    }
-
-    fn print(&self) -> String {
-        format!("{:?}", self.operator)
     }
 }
 
@@ -164,50 +148,9 @@ fn get_operator_precedence(op: &str) -> u8 {
     };
 }
 
-pub fn str_to_int(s: &str) -> i64 {
-    let mut res: i64 = 0;
-    let mut pow = u32::try_from(s.len()).expect("too long string") - 1;
-    for c in s.chars() {
-        let d = c.to_digit(10).expect("not a digit");
-        res += i64::from(d) * 10_i64.pow(pow);
-        if pow > 0 {
-            pow -= 1;
-        }
-    }
-    return res;
-}
-
-pub fn str_to_float(s: &str) -> f64 {
-    let mut res = 0.0;
-    let mut f_part = false;
-    for part in s.split('.') {
-        if f_part {
-            res += str_to_int(part) as f64 * 1.0 / 10_i64.pow(part.len() as u32) as f64
-        } else {
-            res += str_to_int(part) as f64;
-        }
-        f_part = true;
-    }
-    return res;
-}
-
 #[cfg(test)]
 mod str_to_tests {
     use super::*;
-
-    #[test]
-    fn str_to_int_test() {
-        assert_eq!(123, str_to_int("123"));
-        assert_eq!(0, str_to_int("0"));
-    }
-
-    #[test]
-    fn str_to_float_test() {
-        assert_eq!(123.0, str_to_float("123"));
-        assert_eq!(0.0, str_to_float("0"));
-        assert_eq!(123.123, str_to_float("123.123"));
-        assert_eq!(0.123, str_to_float("0.123"));
-    }
 
     #[test]
     fn str_to_rpn_test_1() {
@@ -236,21 +179,18 @@ mod str_to_tests {
     #[test]
     fn numeric_eval() {
         let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1").unwrap();
-        println!("evaluable: {:?}", e);
         assert_eq!(OperatorResult::F64(5.0), e.eval());
     }
 
     #[test]
     fn bool_eval_1() {
         let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1>6").unwrap();
-        println!("evaluable: {:?}", e);
         assert_eq!(OperatorResult::Bool(false), e.eval());
     }
 
     #[test]
     fn bool_eval_2() {
         let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1>4 && 7>6").unwrap();
-        println!("evaluable: {:?}", e);
         assert_eq!(OperatorResult::Bool(true), e.eval());
     }
 }

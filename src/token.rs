@@ -34,16 +34,9 @@ pub struct Token {
 
 pub trait Operator<T> {
     fn eval(&self) -> T;
-    fn print(&self) -> String;
 }
 
-impl<T> Debug for dyn Operator<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{{{}}}", self.print())
-    }
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Value {
     val: OperatorResult,
 }
@@ -51,10 +44,6 @@ pub struct Value {
 impl Operator<OperatorResult> for Value {
     fn eval(&self) -> OperatorResult {
         self.val
-    }
-
-    fn print(&self) -> String {
-        format!("{:?}", self.val)
     }
 }
 
@@ -73,7 +62,6 @@ impl FromStr for Value {
     }
 }
 
-#[derive(Debug)]
 pub struct F64Operator<F> {
     left: Box<dyn Operator<OperatorResult>>,
     right: Box<dyn Operator<OperatorResult>>,
@@ -99,13 +87,8 @@ impl<F> Operator<OperatorResult> for F64Operator<F>
         };
         (self.func)(left, right)
     }
-
-    fn print(&self) -> String {
-        format!("({} {})", self.left.print(), self.right.print())
-    }
 }
 
-#[derive(Debug)]
 pub struct BoolOperator<F> {
     left: Box<dyn Operator<OperatorResult>>,
     right: Box<dyn Operator<OperatorResult>>,
@@ -130,9 +113,5 @@ impl<F> Operator<OperatorResult> for BoolOperator<F>
             _ => false,
         };
         (self.func)(left, right)
-    }
-
-    fn print(&self) -> String {
-        format!("({} {})", self.left.print(), self.right.print())
     }
 }
