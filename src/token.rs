@@ -1,6 +1,6 @@
-use std::str::FromStr;
 use core::fmt::Debug;
-use std::fmt;
+use std::str::FromStr;
+use std::{error, fmt};
 
 #[derive(PartialEq, Debug)]
 pub enum TokenType {
@@ -15,6 +15,31 @@ pub enum TokenType {
 pub enum OperatorResult {
     F64(f64),
     Bool(bool),
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum EvaluationParseError {
+    UnsupportedValue(String),
+    InvalidExpression(String),
+}
+
+impl error::Error for EvaluationParseError {}
+
+impl fmt::Display for EvaluationParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EvaluationParseError::UnsupportedValue(e) => {
+                write!(
+                    f,
+                    "value '{}' not supported, only f64 and bool are supported",
+                    e
+                )
+            }
+            EvaluationParseError::InvalidExpression(e) => {
+                write!(f, "the expression '{}' is invalid", e)
+            }
+        }
+    }
 }
 
 impl Debug for OperatorResult {
@@ -34,9 +59,16 @@ pub struct Token {
 
 pub trait Operator<T> {
     fn eval(&self) -> T;
+    fn to_string(&self) -> String;
 }
 
-#[derive(PartialEq)]
+impl<T> Debug for dyn Operator<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Value {
     val: OperatorResult,
 }
@@ -45,37 +77,58 @@ impl Operator<OperatorResult> for Value {
     fn eval(&self) -> OperatorResult {
         self.val
     }
-}
 
-impl FromStr for Value {
-
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(val) = f64::from_str(s) {
-            return Ok(Self{val:OperatorResult::F64(val)})
-        }
-        if let Ok(val) = bool::from_str(s) {
-            return Ok(Self{val:OperatorResult::Bool(val)})
-        }
-        Err("Unsupported type".into())
+    fn to_string(&self) -> String {
+        format!("{:?}", self.val)
     }
 }
 
+impl FromStr for Value {
+    type Err = EvaluationParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(val) = f64::from_str(s) {
+            return Ok(Self {
+                val: OperatorResult::F64(val),
+            });
+        }
+        if let Ok(val) = bool::from_str(s) {
+            return Ok(Self {
+                val: OperatorResult::Bool(val),
+            });
+        }
+        Err(EvaluationParseError::UnsupportedValue(s.into()))
+    }
+}
+
+#[derive(Debug)]
 pub struct F64Operator<F> {
     left: Box<dyn Operator<OperatorResult>>,
     right: Box<dyn Operator<OperatorResult>>,
     func: F,
+    op: String,
 }
 
 impl<F> F64Operator<F> {
-    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>, func: F) -> Self {
-        Self { left, right, func }
+    pub fn new(
+        left: Box<dyn Operator<OperatorResult>>,
+        right: Box<dyn Operator<OperatorResult>>,
+        func: F,
+        op: String,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            func,
+            op,
+        }
     }
 }
 
 impl<F> Operator<OperatorResult> for F64Operator<F>
-    where F: Fn(f64, f64) -> OperatorResult {
+where
+    F: Fn(f64, f64) -> OperatorResult,
+{
     fn eval(&self) -> OperatorResult {
         let left = match self.left.eval() {
             OperatorResult::F64(v) => v,
@@ -87,22 +140,40 @@ impl<F> Operator<OperatorResult> for F64Operator<F>
         };
         (self.func)(left, right)
     }
+
+    fn to_string(&self) -> String {
+        format!("({:?} {} {:?})", self.left, self.op, self.right)
+    }
 }
 
+#[derive(Debug)]
 pub struct BoolOperator<F> {
     left: Box<dyn Operator<OperatorResult>>,
     right: Box<dyn Operator<OperatorResult>>,
     func: F,
+    op: String,
 }
 
 impl<F> BoolOperator<F> {
-    pub fn new(left: Box<dyn Operator<OperatorResult>>, right: Box<dyn Operator<OperatorResult>>, func: F) -> Self {
-        Self { left, right, func }
+    pub fn new(
+        left: Box<dyn Operator<OperatorResult>>,
+        right: Box<dyn Operator<OperatorResult>>,
+        func: F,
+        op: String,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            func,
+            op,
+        }
     }
 }
 
 impl<F> Operator<OperatorResult> for BoolOperator<F>
-    where F: Fn(bool, bool) -> OperatorResult {
+where
+    F: Fn(bool, bool) -> OperatorResult,
+{
     fn eval(&self) -> OperatorResult {
         let left = match self.left.eval() {
             OperatorResult::Bool(v) => v,
@@ -113,5 +184,9 @@ impl<F> Operator<OperatorResult> for BoolOperator<F>
             _ => false,
         };
         (self.func)(left, right)
+    }
+
+    fn to_string(&self) -> String {
+        format!("({:?} {} {:?})", self.left, self.op, self.right)
     }
 }

@@ -1,12 +1,13 @@
 use std::str::FromStr;
 
-pub use crate::token::{Operator, Token, TokenType, Value};
-use crate::token::{F64Operator, BoolOperator};
 pub use crate::token::OperatorResult;
 use crate::token::TokenType::*;
+use crate::token::{BoolOperator, EvaluationParseError, F64Operator};
+pub use crate::token::{Operator, Token, TokenType, Value};
 
 mod token;
 
+#[derive(Debug)]
 pub struct Evaluable<T> {
     operator: Box<dyn Operator<T>>,
 }
@@ -15,38 +16,77 @@ impl Operator<OperatorResult> for Evaluable<OperatorResult> {
     fn eval(&self) -> OperatorResult {
         self.operator.eval()
     }
+
+    fn to_string(&self) -> String {
+        format!("{:?}", self.operator)
+    }
 }
 
 impl FromStr for Evaluable<OperatorResult> {
-    type Err = ();
+    type Err = EvaluationParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let rpn = to_rpn(str_to_tokens(s));
         let mut stack: Vec<Box<dyn Operator<_>>> = Vec::new();
         for token in rpn {
             match token.t {
-                Operand => stack.push(Box::new(Value::from_str(&token.v).unwrap())),
+                Operand => stack.push(Box::new(Value::from_str(&token.v)?)),
                 Operator => {
+                    if stack.len() < 2 {
+                        return Err(EvaluationParseError::InvalidExpression(s.into()));
+                    }
                     let right = stack.pop().unwrap();
                     let left = stack.pop().unwrap();
                     if token.v == "+" {
-                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::F64(a + b))));
+                        stack.push(Box::new(F64Operator::new(
+                            left,
+                            right,
+                            |a, b| OperatorResult::F64(a + b),
+                            token.v,
+                        )));
                     } else if token.v == "-" {
-                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::F64(a - b))));
+                        stack.push(Box::new(F64Operator::new(
+                            left,
+                            right,
+                            |a, b| OperatorResult::F64(a - b),
+                            token.v,
+                        )));
                     } else if token.v == "*" {
-                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::F64(a * b))));
+                        stack.push(Box::new(F64Operator::new(
+                            left,
+                            right,
+                            |a, b| OperatorResult::F64(a * b),
+                            token.v,
+                        )));
                     } else if token.v == "/" {
-                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::F64(a / b))));
+                        stack.push(Box::new(F64Operator::new(
+                            left,
+                            right,
+                            |a, b| OperatorResult::F64(a / b),
+                            token.v,
+                        )));
                     } else if token.v == ">" {
-                        stack.push(Box::new(F64Operator::new(left, right, |a, b| OperatorResult::Bool(a > b))));
+                        stack.push(Box::new(F64Operator::new(
+                            left,
+                            right,
+                            |a, b| OperatorResult::Bool(a > b),
+                            token.v,
+                        )));
                     } else if token.v == "&&" {
-                        stack.push(Box::new(BoolOperator::new(left, right, |a, b| OperatorResult::Bool(a && b))));
+                        stack.push(Box::new(BoolOperator::new(
+                            left,
+                            right,
+                            |a, b| OperatorResult::Bool(a && b),
+                            token.v,
+                        )));
                     }
                 }
-                _ => {}
+                _ => return Err(EvaluationParseError::InvalidExpression(s.into())),
             }
         }
-        Ok(Evaluable { operator: stack.pop().unwrap() })
+        Ok(Evaluable {
+            operator: stack.pop().unwrap(),
+        })
     }
 }
 
@@ -58,13 +98,33 @@ pub fn str_to_tokens(s: &str) -> Vec<Token> {
         } else if c == '.' {
             process_char(&mut tokens, c, Operand, Some("0"));
         } else if c == '(' {
-            tokens.push(Token { t: OpenBrace, v: String::from(c) })
+            tokens.push(Token {
+                t: OpenBrace,
+                v: String::from(c),
+            })
         } else if c == ')' {
-            tokens.push(Token { t: CloseBrace, v: String::from(c) })
+            tokens.push(Token {
+                t: CloseBrace,
+                v: String::from(c),
+            })
         } else if c == ',' {
-            tokens.push(Token { t: ArgSeparator, v: String::from(c) })
-        } else if c == '*' || c == '/' || c == '%' || c == '+' || c == '-' || c == '<' || c == '>'
-            || c == '=' || c == '!' || c == '&' || c == '^' || c == '|' {
+            tokens.push(Token {
+                t: ArgSeparator,
+                v: String::from(c),
+            })
+        } else if c == '*'
+            || c == '/'
+            || c == '%'
+            || c == '+'
+            || c == '-'
+            || c == '<'
+            || c == '>'
+            || c == '='
+            || c == '!'
+            || c == '&'
+            || c == '^'
+            || c == '|'
+        {
             process_char(&mut tokens, c, Operator, None);
         }
     }
@@ -77,12 +137,18 @@ fn process_char(tokens: &mut Vec<Token>, c: char, token_type: TokenType, prefix:
         Some(pp) => pp,
     };
     match tokens.last_mut() {
-        None => tokens.push(Token { t: token_type, v: String::from(p) + &String::from(c) }),
+        None => tokens.push(Token {
+            t: token_type,
+            v: String::from(p) + &String::from(c),
+        }),
         Some(t) => {
             if t.t == token_type {
                 t.v.push(c);
             } else {
-                tokens.push(Token { t: token_type, v: String::from(p) + &String::from(c) });
+                tokens.push(Token {
+                    t: token_type,
+                    v: String::from(p) + &String::from(c),
+                });
             }
         }
     };
@@ -96,13 +162,18 @@ fn to_rpn(tokens: Vec<Token>) -> Vec<Token> {
             ops.push(token);
         } else if token.t == CloseBrace {
             while let Some(op) = ops.pop() {
-                if op.t == OpenBrace { break; }
+                if op.t == OpenBrace {
+                    break;
+                }
                 rpn.push(op);
             }
         } else if token.t != Operator {
             rpn.push(token);
         } else {
-            if ops.is_empty() || get_operator_precedence(&ops.last().unwrap().v) > get_operator_precedence(&token.v) {
+            if ops.is_empty()
+                || get_operator_precedence(&ops.last().unwrap().v)
+                    > get_operator_precedence(&token.v)
+            {
                 ops.push(token);
             } else {
                 while let Some(stack_op) = ops.last() {
@@ -154,31 +225,43 @@ mod str_to_tests {
 
     #[test]
     fn str_to_rpn_test_1() {
-        let rpn: String = to_rpn(str_to_tokens("a+b*c+d")).iter().flat_map(|t| t.v.chars()).collect();
+        let rpn: String = to_rpn(str_to_tokens("a+b*c+d"))
+            .iter()
+            .flat_map(|t| t.v.chars())
+            .collect();
         assert_eq!("abc*+d+", rpn);
     }
 
     #[test]
     fn str_to_rpn_test_2() {
-        let rpn: String = to_rpn(str_to_tokens("a+b*(c^d-e)^(f+g*h)-i")).iter().flat_map(|t| t.v.chars()).collect();
+        let rpn: String = to_rpn(str_to_tokens("a+b*(c^d-e)^(f+g*h)-i"))
+            .iter()
+            .flat_map(|t| t.v.chars())
+            .collect();
         assert_eq!("abcd^e-fgh*+^*+i-", rpn);
     }
 
     #[test]
     fn str_to_rpn_test_3() {
-        let rpn: String = to_rpn(str_to_tokens("A*(B+C)/D")).iter().flat_map(|t| t.v.chars()).collect();
+        let rpn: String = to_rpn(str_to_tokens("A*(B+C)/D"))
+            .iter()
+            .flat_map(|t| t.v.chars())
+            .collect();
         assert_eq!("ABC+*D/", rpn);
     }
 
     #[test]
     fn str_to_rpn_test_4() {
-        let rpn: String = to_rpn(str_to_tokens("(6+10-4)/(1+1*2)+1")).iter().flat_map(|t| t.v.chars()).collect();
+        let rpn: String = to_rpn(str_to_tokens("(6+10-4)/(1+1*2)+1"))
+            .iter()
+            .flat_map(|t| t.v.chars())
+            .collect();
         assert_eq!("610+4-112*+/1+", rpn);
     }
 
     #[test]
     fn numeric_eval() {
-        let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1").unwrap();
+        let e = <Evaluable<OperatorResult>>::from_str("(6+10.0-4)/(1+1*2)+1").unwrap();
         assert_eq!(OperatorResult::F64(5.0), e.eval());
     }
 
@@ -192,5 +275,60 @@ mod str_to_tests {
     fn bool_eval_2() {
         let e = <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1>4 && 7>6").unwrap();
         assert_eq!(OperatorResult::Bool(true), e.eval());
+    }
+
+    #[test]
+    fn bool_eval_4() {
+        let e =
+            <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1>4 && 7>6 && false").unwrap();
+        assert_eq!(OperatorResult::Bool(false), e.eval());
+    }
+
+    #[test]
+    fn f64_to_string() {
+        let e = <Evaluable<OperatorResult>>::from_str("6+6").unwrap();
+        assert_eq!("(6 + 6)", e.to_string());
+    }
+
+    #[test]
+    fn bool_to_string() {
+        let e = <Evaluable<OperatorResult>>::from_str("5>6&&4>6").unwrap();
+        assert_eq!("((5 > 6) && (4 > 6))", e.to_string());
+    }
+
+    #[test]
+    fn incorrect_eval_1() {
+        let e = <Evaluable<OperatorResult>>::from_str("6+");
+        assert_eq!(
+            EvaluationParseError::InvalidExpression("6+".into()),
+            e.expect_err("no error returned")
+        );
+    }
+
+    #[test]
+    fn incorrect_eval_2() {
+        let e = <Evaluable<OperatorResult>>::from_str("(6+6");
+        assert_eq!(
+            EvaluationParseError::InvalidExpression("(6+6".into()),
+            e.expect_err("no error returned")
+        );
+    }
+
+    #[test]
+    fn incorrect_eval_3() {
+        let e = <Evaluable<OperatorResult>>::from_str("+6");
+        assert_eq!(
+            EvaluationParseError::InvalidExpression("+6".into()),
+            e.expect_err("no error returned")
+        );
+    }
+
+    #[test]
+    fn unsupported_value() {
+        let e = <Evaluable<OperatorResult>>::from_str("6as");
+        assert_eq!(
+            EvaluationParseError::UnsupportedValue("6as".into()),
+            e.expect_err("no error returned")
+        );
     }
 }
