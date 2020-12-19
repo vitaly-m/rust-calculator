@@ -260,9 +260,18 @@ mod str_to_tests {
     }
 
     #[test]
-    fn numeric_eval() {
+    fn numeric_eval_1() {
         let e = <Evaluable<OperatorResult>>::from_str("(6+10.0-4)/(1+1*2)+1").unwrap();
         assert_eq!(OperatorResult::F64(5.0), e.eval());
+    }
+
+    #[test]
+    fn numeric_eval_2() {
+        let e = <Evaluable<OperatorResult>>::from_str("(6>7)+(5>6)").unwrap();
+        match e.eval() {
+            OperatorResult::F64(v) => assert!(v.is_nan()),
+            OperatorResult::Bool(_) => assert!(false),
+        }
     }
 
     #[test]
@@ -281,6 +290,12 @@ mod str_to_tests {
     fn bool_eval_4() {
         let e =
             <Evaluable<OperatorResult>>::from_str("(6+10-4)/(1+1*2)+1>4 && 7>6 && false").unwrap();
+        assert_eq!(OperatorResult::Bool(false), e.eval());
+    }
+
+    #[test]
+    fn bool_eval_5() {
+        let e = <Evaluable<OperatorResult>>::from_str("6 && 6").unwrap();
         assert_eq!(OperatorResult::Bool(false), e.eval());
     }
 
