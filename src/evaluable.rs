@@ -2,19 +2,30 @@ use core::fmt::Debug;
 use std::str::FromStr;
 use std::{error, fmt};
 
-#[derive(PartialEq, Debug)]
-pub enum TokenType {
-    Operand,
-    Operator,
-    OpenBrace,
-    CloseBrace,
-    ArgSeparator,
-}
-
 #[derive(PartialEq, Copy, Clone)]
-pub enum OperatorResult {
+pub enum EvaluableResult {
     F64(f64),
     Bool(bool),
+}
+
+impl Debug for EvaluableResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EvaluableResult::F64(v) => write!(f, "{}", v),
+            EvaluableResult::Bool(v) => write!(f, "{}", v),
+        }
+    }
+}
+
+pub trait Evaluable<T> {
+    fn eval(&self) -> T;
+    fn to_string(&self) -> String;
+}
+
+impl<T> Debug for dyn Evaluable<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -42,39 +53,13 @@ impl fmt::Display for EvaluationParseError {
     }
 }
 
-impl Debug for OperatorResult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OperatorResult::F64(v) => write!(f, "{}", v),
-            OperatorResult::Bool(v) => write!(f, "{}", v),
-        }
-    }
-}
-
-#[derive(PartialEq, Debug)]
-pub struct Token {
-    pub t: TokenType,
-    pub v: String,
-}
-
-pub trait Operator<T> {
-    fn eval(&self) -> T;
-    fn to_string(&self) -> String;
-}
-
-impl<T> Debug for dyn Operator<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.to_string())
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct Value {
-    val: OperatorResult,
+    val: EvaluableResult,
 }
 
-impl Operator<OperatorResult> for Value {
-    fn eval(&self) -> OperatorResult {
+impl Evaluable<EvaluableResult> for Value {
+    fn eval(&self) -> EvaluableResult {
         self.val
     }
 
@@ -89,12 +74,12 @@ impl FromStr for Value {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(val) = f64::from_str(s) {
             return Ok(Self {
-                val: OperatorResult::F64(val),
+                val: EvaluableResult::F64(val),
             });
         }
         if let Ok(val) = bool::from_str(s) {
             return Ok(Self {
-                val: OperatorResult::Bool(val),
+                val: EvaluableResult::Bool(val),
             });
         }
         Err(EvaluationParseError::UnsupportedValue(s.into()))
@@ -102,17 +87,17 @@ impl FromStr for Value {
 }
 
 #[derive(Debug)]
-pub struct GenericOperator<F> {
-    left: Box<dyn Operator<OperatorResult>>,
-    right: Box<dyn Operator<OperatorResult>>,
+pub struct BasicEvaluable<F> {
+    left: Box<dyn Evaluable<EvaluableResult>>,
+    right: Box<dyn Evaluable<EvaluableResult>>,
     func: F,
     op: String,
 }
 
-impl<F> GenericOperator<F> {
+impl<F> BasicEvaluable<F> {
     pub fn new(
-        left: Box<dyn Operator<OperatorResult>>,
-        right: Box<dyn Operator<OperatorResult>>,
+        left: Box<dyn Evaluable<EvaluableResult>>,
+        right: Box<dyn Evaluable<EvaluableResult>>,
         func: F,
         op: String,
     ) -> Self {
@@ -125,14 +110,14 @@ impl<F> GenericOperator<F> {
     }
 }
 
-impl Operator<OperatorResult> for GenericOperator<fn(f64, f64) -> OperatorResult> {
-    fn eval(&self) -> OperatorResult {
+impl Evaluable<EvaluableResult> for BasicEvaluable<fn(f64, f64) -> EvaluableResult> {
+    fn eval(&self) -> EvaluableResult {
         let left = match self.left.eval() {
-            OperatorResult::F64(v) => v,
+            EvaluableResult::F64(v) => v,
             _ => f64::NAN,
         };
         let right = match self.right.eval() {
-            OperatorResult::F64(v) => v,
+            EvaluableResult::F64(v) => v,
             _ => f64::NAN,
         };
         (self.func)(left, right)
@@ -143,14 +128,14 @@ impl Operator<OperatorResult> for GenericOperator<fn(f64, f64) -> OperatorResult
     }
 }
 
-impl Operator<OperatorResult> for GenericOperator<fn(bool, bool) -> OperatorResult> {
-    fn eval(&self) -> OperatorResult {
+impl Evaluable<EvaluableResult> for BasicEvaluable<fn(bool, bool) -> EvaluableResult> {
+    fn eval(&self) -> EvaluableResult {
         let left = match self.left.eval() {
-            OperatorResult::Bool(v) => v,
+            EvaluableResult::Bool(v) => v,
             _ => false,
         };
         let right = match self.right.eval() {
-            OperatorResult::Bool(v) => v,
+            EvaluableResult::Bool(v) => v,
             _ => false,
         };
         (self.func)(left, right)
