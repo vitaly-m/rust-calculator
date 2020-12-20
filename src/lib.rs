@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 pub use crate::token::OperatorResult;
 use crate::token::TokenType::*;
-use crate::token::{BoolOperator, EvaluationParseError, F64Operator};
+use crate::token::{EvaluationParseError, GenericOperator};
 pub use crate::token::{Operator, Token, TokenType, Value};
 
 mod token;
@@ -37,48 +37,37 @@ impl FromStr for Evaluable<OperatorResult> {
                     }
                     let right = stack.pop().unwrap();
                     let left = stack.pop().unwrap();
+                    let mut f64_func: Option<fn(f64, f64) -> OperatorResult> = None;
+                    let mut bool_func: Option<fn(bool, bool) -> OperatorResult> = None;
                     if token.v == "+" {
-                        stack.push(Box::new(F64Operator::new(
-                            left,
-                            right,
-                            |a, b| OperatorResult::F64(a + b),
-                            token.v,
-                        )));
+                        f64_func = Some(|a, b| OperatorResult::F64(a + b));
                     } else if token.v == "-" {
-                        stack.push(Box::new(F64Operator::new(
-                            left,
-                            right,
-                            |a, b| OperatorResult::F64(a - b),
-                            token.v,
-                        )));
+                        f64_func = Some(|a, b| OperatorResult::F64(a - b));
                     } else if token.v == "*" {
-                        stack.push(Box::new(F64Operator::new(
-                            left,
-                            right,
-                            |a, b| OperatorResult::F64(a * b),
-                            token.v,
-                        )));
+                        f64_func = Some(|a, b| OperatorResult::F64(a * b));
                     } else if token.v == "/" {
-                        stack.push(Box::new(F64Operator::new(
-                            left,
-                            right,
-                            |a, b| OperatorResult::F64(a / b),
-                            token.v,
-                        )));
+                        f64_func = Some(|a, b| OperatorResult::F64(a / b));
+                    } else if token.v == "%" {
+                        f64_func = Some(|a, b| OperatorResult::F64(a % b));
+                    } else if token.v == "^" {
+                        f64_func = Some(|a, b| OperatorResult::F64(a.powf(b)));
+                    } else if token.v == "<" {
+                        f64_func = Some(|a, b| OperatorResult::Bool(a < b));
+                    } else if token.v == "<=" {
+                        f64_func = Some(|a, b| OperatorResult::Bool(a <= b));
                     } else if token.v == ">" {
-                        stack.push(Box::new(F64Operator::new(
-                            left,
-                            right,
-                            |a, b| OperatorResult::Bool(a > b),
-                            token.v,
-                        )));
+                        f64_func = Some(|a, b| OperatorResult::Bool(a > b));
+                    } else if token.v == ">=" {
+                        f64_func = Some(|a, b| OperatorResult::Bool(a >= b));
                     } else if token.v == "&&" {
-                        stack.push(Box::new(BoolOperator::new(
-                            left,
-                            right,
-                            |a, b| OperatorResult::Bool(a && b),
-                            token.v,
-                        )));
+                        bool_func = Some(|a, b| OperatorResult::Bool(a && b));
+                    } else if token.v == "||" {
+                        bool_func = Some(|a, b| OperatorResult::Bool(a || b));
+                    }
+                    if let Some(func) = f64_func {
+                        stack.push(Box::new(GenericOperator::new(left, right, func, token.v)));
+                    } else if let Some(func) = bool_func {
+                        stack.push(Box::new(GenericOperator::new(left, right, func, token.v)));
                     }
                 }
                 _ => return Err(EvaluationParseError::InvalidExpression(s.into())),
@@ -200,16 +189,8 @@ fn get_operator_precedence(op: &str) -> u8 {
         30
     } else if op == "+" || op == "-" {
         40
-    } else if op == "<<" || op == ">>" {
-        50
     } else if op == "<" || op == "<=" || op == ">" || op == ">=" {
         60
-    } else if op == "==" || op == "!=" {
-        70
-    } else if op == "&" {
-        80
-    } else if op == "|" {
-        100
     } else if op == "&&" {
         110
     } else if op == "||" {
@@ -345,5 +326,82 @@ mod str_to_tests {
             EvaluationParseError::UnsupportedValue("6as".into()),
             e.expect_err("no error returned")
         );
+    }
+}
+
+#[cfg(test)]
+mod supported_operators_tests {
+    use super::*;
+
+    #[test]
+    fn plus() {
+        let e = <Evaluable<OperatorResult>>::from_str("5+5").unwrap();
+        assert_eq!(OperatorResult::F64(10.0), e.eval());
+    }
+
+    #[test]
+    fn minus() {
+        let e = <Evaluable<OperatorResult>>::from_str("5-5").unwrap();
+        assert_eq!(OperatorResult::F64(0.0), e.eval());
+    }
+
+    #[test]
+    fn multiply() {
+        let e = <Evaluable<OperatorResult>>::from_str("5*5").unwrap();
+        assert_eq!(OperatorResult::F64(25.0), e.eval());
+    }
+
+    #[test]
+    fn divide() {
+        let e = <Evaluable<OperatorResult>>::from_str("5/5").unwrap();
+        assert_eq!(OperatorResult::F64(1.0), e.eval());
+    }
+
+    #[test]
+    fn pow() {
+        let e = <Evaluable<OperatorResult>>::from_str("5^5").unwrap();
+        assert_eq!(OperatorResult::F64(3125.0), e.eval());
+    }
+
+    #[test]
+    fn mod_op() {
+        let e = <Evaluable<OperatorResult>>::from_str("27%5").unwrap();
+        assert_eq!(OperatorResult::F64(2.0), e.eval());
+    }
+
+    #[test]
+    fn less() {
+        let e = <Evaluable<OperatorResult>>::from_str("5<6").unwrap();
+        assert_eq!(OperatorResult::Bool(true), e.eval());
+    }
+
+    #[test]
+    fn greater() {
+        let e = <Evaluable<OperatorResult>>::from_str("6>5").unwrap();
+        assert_eq!(OperatorResult::Bool(true), e.eval());
+    }
+
+    #[test]
+    fn greater_or_equal() {
+        let e = <Evaluable<OperatorResult>>::from_str("5>=5").unwrap();
+        assert_eq!(OperatorResult::Bool(true), e.eval());
+    }
+
+    #[test]
+    fn less_or_equal() {
+        let e = <Evaluable<OperatorResult>>::from_str("5<=5").unwrap();
+        assert_eq!(OperatorResult::Bool(true), e.eval());
+    }
+
+    #[test]
+    fn logical_and() {
+        let e = <Evaluable<OperatorResult>>::from_str("5<=5 && 6>=5").unwrap();
+        assert_eq!(OperatorResult::Bool(true), e.eval());
+    }
+
+    #[test]
+    fn logical_or() {
+        let e = <Evaluable<OperatorResult>>::from_str("5<2 || 6>=5").unwrap();
+        assert_eq!(OperatorResult::Bool(true), e.eval());
     }
 }

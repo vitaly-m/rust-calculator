@@ -102,14 +102,14 @@ impl FromStr for Value {
 }
 
 #[derive(Debug)]
-pub struct F64Operator<F> {
+pub struct GenericOperator<F> {
     left: Box<dyn Operator<OperatorResult>>,
     right: Box<dyn Operator<OperatorResult>>,
     func: F,
     op: String,
 }
 
-impl<F> F64Operator<F> {
+impl<F> GenericOperator<F> {
     pub fn new(
         left: Box<dyn Operator<OperatorResult>>,
         right: Box<dyn Operator<OperatorResult>>,
@@ -125,10 +125,7 @@ impl<F> F64Operator<F> {
     }
 }
 
-impl<F> Operator<OperatorResult> for F64Operator<F>
-where
-    F: Fn(f64, f64) -> OperatorResult,
-{
+impl Operator<OperatorResult> for GenericOperator<fn(f64, f64) -> OperatorResult> {
     fn eval(&self) -> OperatorResult {
         let left = match self.left.eval() {
             OperatorResult::F64(v) => v,
@@ -146,34 +143,7 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct BoolOperator<F> {
-    left: Box<dyn Operator<OperatorResult>>,
-    right: Box<dyn Operator<OperatorResult>>,
-    func: F,
-    op: String,
-}
-
-impl<F> BoolOperator<F> {
-    pub fn new(
-        left: Box<dyn Operator<OperatorResult>>,
-        right: Box<dyn Operator<OperatorResult>>,
-        func: F,
-        op: String,
-    ) -> Self {
-        Self {
-            left,
-            right,
-            func,
-            op,
-        }
-    }
-}
-
-impl<F> Operator<OperatorResult> for BoolOperator<F>
-where
-    F: Fn(bool, bool) -> OperatorResult,
-{
+impl Operator<OperatorResult> for GenericOperator<fn(bool, bool) -> OperatorResult> {
     fn eval(&self) -> OperatorResult {
         let left = match self.left.eval() {
             OperatorResult::Bool(v) => v,
