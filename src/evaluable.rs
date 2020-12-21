@@ -42,7 +42,7 @@ impl fmt::Display for EvaluationParseError {
             EvaluationParseError::UnsupportedValue(e) => {
                 write!(
                     f,
-                    "value '{}' not supported, only f64 and bool are supported",
+                    "value '{}' is not supported, only f64 and bool are supported",
                     e
                 )
             }
